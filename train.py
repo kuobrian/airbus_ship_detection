@@ -35,23 +35,51 @@ class AirbusDataset(utils.Dataset):
 
         self.data_config = data_config
         coco = COCO(self.data_config)
-
-        # self.parse_config()
-
-    def load_airbus(self, dataset_dir, subset, year=DEFAULT_DATASET_YEAR, class_ids=None,
-                  class_map=None, return_coco=False, auto_download=False):
+        image_dir = "./data/train_v2"
+        class_ids = sorted(coco.getCatIds())
         
-        ''' Load a subset of the COCO dataset.
-            dataset_dir: The root directory of the COCO dataset.
-            subset: What to load (train, val, minival, valminusminival)
-            year: What dataset year to load (2014, 2017) as a string, not an integer
-            class_ids: If provided, only loads images that have the given classes.
-            class_map: TODO: Not implemented yet. Supports maping classes from
-                different datasets to the same class ID.
-            return_coco: If True, returns the COCO object.
-            auto_download: Automatically download and unzip MS-COCO images and annotations
+        if class_ids:
+            image_ids = []
+            for id in class_ids:
+                image_ids.extend(list(coco.getImgIds(catIds=[id])))
+            image_ids = list(set(image_ids))
+        else:
+            image_ids = list(coco.imgs.keys())
+
+        for i in class_ids:
+            self.add_class("coco", i, coco.loadCats(i)[0]["name"])
+        
+        for i in image_ids:
+            self.add_image(source = "airbus",
+                            image_id = i,
+                            path = os.path.join(image_dir, coco.imgs[i]["file_name"]),
+                            width = coco.imgs[i]["width"],
+                            height = coco.imgs[i]["height"],
+                            annotations = coco.loadAnns(coco.getAnnIds(
+                                                            imgIds = [i],
+                                                            catIds = class_ids,
+                                                            iscrowd = None)))
+
+    def load_mask(self, image_id):
+        ''' Load instance masks for the given image
+            Returns:
+                mask: A bool array of shape [height, width, instance count]
+                    with one mask per instance.
+                class_ids: a 1D array of class IDs of the instance masks
         '''
-        
+
+        image_info = self.image_info[image_id]
+        isinstance_masks = []
+        class_ids = []
+        annotations = self.image_info[image_id]["annotations"]
+
+        # Build mask of shape [height, width, instance_count] and list
+        # of class IDs that correspond to each channel of the mask
+
+        # for annotation in annotations:
+        #     class_id = self.ma
+
+
 
     def parse_config(self):
         with open(self.data_config) as json_file:
@@ -66,6 +94,7 @@ class AirbusDataset(utils.Dataset):
 
 if __name__ == "__main__":
     dataset_train = AirbusDataset(DATASET_CONFIG_PATH)
+    dataset_train.load_mask(1)
     # model = modellib.MaskRCNN()
 
     

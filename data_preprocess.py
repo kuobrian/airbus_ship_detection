@@ -181,6 +181,9 @@ if __name__ == "__main__":
     test_csv = "./data/sample_submission_v2.csv"
 
     df = Useful_Traing_set(dataset_train, train_csv)
+    
+    if os.path.exists("./data/train_valid.txt"):
+        df = Useful_Traing_set(dataset_train, train_csv)
 
     with open("./data/train_valid.txt", "r") as file:
         lines = file.readlines()
