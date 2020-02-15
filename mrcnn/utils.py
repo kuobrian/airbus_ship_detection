@@ -1,3 +1,11 @@
+from skimage import io
+import numpy as np
+import matplotlib.pyplot as plt
+import skimage.io
+
+
+
+
 
 class Dataset(object):
     """The base class for dataset classes.
@@ -74,7 +82,49 @@ class Dataset(object):
         '''
         return self.class_from_source_map[source_class_id]
 
-    # def
+    def get_source_class_id(self, class_id, source):
+        '''
+        Map an internal class ID to corresponding class ID in the
+        source dataset
+        '''
+        info = self.class_info[class_id]
+        assert info["source"] == source
+        return info["id"]
+    
+    @property
+    def image_ids(self):
+        return self._image_ids
+    
+    def source_image_link(self, image_id):
+        return self.image_info[image_id]["path"]
+    
+    def load_image(self, image_id):
+        '''
+        Load the specified image and return [H, W, 3] Numpy array
+        '''
+        image = skimage.io.imread(self.image_info[image_id]["path"])
+        # If grayscale. Convert to RGB for consistency.
+        if image.ndim !=3:
+            image = skimage.color.gray2rgb(image)
+        # If has an alpha channel, remove it for consistency
+        if image.shape[-1] == 4:
+            image = image[..., :3]
+        return image
+    
+    def load_maks(self, image_id):
+        '''
+        Load instance masks for the given image.
+
+        Return:
+            makss: Abool array of shape [height, width, instance count] with
+                a binary mask per instance
+            class_ids: a 1D array of class IDS of the instance masks.
+        '''
+        logging.warning("You are using the default load_mask(), maybe you need to define your own one.")
+        mask = np.array([0,0,0])
+        class_ids = np.empty([0], np.int32)
+        return mask, class_ids
+
 
     
 
