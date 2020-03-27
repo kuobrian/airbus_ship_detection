@@ -22,7 +22,7 @@ from pycococreator import pycococreator
 def Useful_Traing_set(dataset_train, train_csv):
     # read csv
     df = pd.read_csv(train_csv)
-    print("Dataframe lines: ", df.shape[0])
+    print("num of data: ", df.shape[0])
 
     df = df.dropna(axis=0)
     num_of_ships = df.shape[0]
@@ -56,7 +56,6 @@ def rle_decode(mask_rle, shape=(768, 768)):
     s = mask_rle.split()
     starts =  np.asarray(s[0::2], dtype=int)
     lengths = np.asarray(s[1::2], dtype=int)
-
     starts -= 1
     ends = starts + lengths
     img = np.zeros(shape[0]*shape[1], dtype=np.uint8)
@@ -67,8 +66,8 @@ def rle_decode(mask_rle, shape=(768, 768)):
 def csv_show_rle(ImageId, dataset, df):
     img_path = os.path.join(dataset, ImageId)
     img = Image.open(img_path)
-    rle_masks = df.loc[df["ImageId"] == ImageId, "EncodedPixels"].tolist()
-
+    rle_masks = df.loc[df["ImageId"] == "000155de5.jpg", "EncodedPixels"].tolist()
+    
     if isinstance(rle_masks[0], str):
         # Take the individual ship masks and create a single mask array for all ships
         all_masks = np.zeros((768, 768))
@@ -89,12 +88,19 @@ def csv_show_rle(ImageId, dataset, df):
         plt.show()
 
 
+
+
+
+
+
+
+
 INFO = {
     "description": "Kaggle Dataset",
-    "url": "https://github.com/pascal1129",
+    "url": "https://github.com/kuobrian/",
     "version": "0.1.0",
-    "year": 2018,
-    "contributor": "pascal1129",
+    "year": 2020,
+    "contributor": "kuobrian",
     "date_created": datetime.datetime.utcnow().isoformat(' ')
 }
 
@@ -153,6 +159,7 @@ def turn2coco(images_path, df):
 
         rle_masks = df.loc[df['ImageId'] == iname, 'EncodedPixels'].tolist()
         num_of_rle_masks = len(rle_masks)
+
         for index in range(num_of_rle_masks):
             binary_mask = rle_decode(rle_masks[index])
             class_id = 1
@@ -168,6 +175,8 @@ def turn2coco(images_path, df):
 
         print("%d of %d is done."%(image_id, num_of_image_files))
         image_id = image_id + 1
+
+    
     with open('./data/annotations/instances_ships_train2018.json', 'w') as output_json_file:
         # json.dump(coco_output, output_json_file)
         json.dump(coco_output, output_json_file, indent=4)
@@ -182,7 +191,7 @@ if __name__ == "__main__":
 
     df = Useful_Traing_set(dataset_train, train_csv)
     
-    if os.path.exists("./data/train_valid.txt"):
+    if not os.path.exists("./data/train_valid.txt"):
         df = Useful_Traing_set(dataset_train, train_csv)
 
     with open("./data/train_valid.txt", "r") as file:
@@ -195,6 +204,7 @@ if __name__ == "__main__":
     count = 0
     ImageId_list = os.listdir(dataset_train)
     ImageId = random.choice(ImageId_list)
-    # csv_show_rle(ImageId, dataset_train, df)
-    turn2coco(images_path, df)
+    csv_show_rle(ImageId, dataset_train, df)
+    if not os.path.exists("./data/annotations/instances_ships_train2018.json"):
+        turn2coco(images_path, df)
 
