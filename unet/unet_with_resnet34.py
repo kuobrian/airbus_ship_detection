@@ -48,31 +48,24 @@ class AirbusDataset(Dataset):
             self.train_gp = pd.read_csv("./exist_ships.csv")
 
         self.train_gp= self.train_gp.sort_values(by="exist_ship")
-        # self.train_gp = self.train_gp.drop(self.train_gp.index[0:100000])
+
+
+        self.train_gp = self.train_gp.drop(self.train_gp.index[0:100000])
         to_remove = np.random.choice(self.train_gp[self.train_gp['exist_ship']==0].index,
-                                            size=100000,replace=False)
+                                            size=100000, replace=True)
+
         self.train_gp = self.train_gp.drop(to_remove)
-        # print(self.train_gp["exist_ship"].value_counts())
-        # print (self.train_gp.shape)
         self.train_sample = self.train_gp.sample(5000)
-        # print(self.train_sample["exist_ship"].value_counts())
-        # print(self.train_sample.iloc[0])
-        # image_name = self.train_sample.iloc[0]["ImageId"]
-        # print(image_name)
-        # print(self.train_sample.shape[0])
-    
+        
     def  __getitem__(self ,index):
         image_name = self.train_sample.iloc[index]["ImageId"]
         label = self.train_sample.iloc[index]["exist_ship"]
         imgpath = os.path.join(self.data_dir, "train_v2/"+image_name)
-        print(image_name)
-        imgO = Image.open(imgpath).resize((256,256)).convert('RGB')
-        imgO = np.array(imgO, dtype=np.float32)
-        print(imgO.shape)
+        imgO = Image.open(imgpath).convert('RGB')
         if self.transform is not None :
             imgO = self.transform(imgO)
-        print(imgO.size)
-        return imgO, torch.Tensor(label)
+        
+        return imgO,  torch.LongTensor([label])
     
     def __len__(self):
         return self.train_sample.shape[0]
@@ -170,12 +163,13 @@ def pre_process_data(data_dir):
 if __name__ == "__main__":
     csv_file = "train_ship_segmentations_v2.csv"
     data_dir = "./data_airbus"
-
+    
     m = (0.485, 0.456, 0.406)
     s = (0.229, 0.224, 0.225)
     transform = transforms.Compose([
+        transforms.Resize((256)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=m, std=s),
+        transforms.Normalize(mean=m, std=s)
     ])
 
     airbus_dataset = AirbusDataset(csv_file, data_dir, transform = transform)
@@ -183,11 +177,18 @@ if __name__ == "__main__":
 
     train_loader = DataLoader(dataset=airbus_dataset,
                             batch_size=2,
-                            shuffle=False)
-    for imgo , lbl in train_loader:
-        # print(img.shape)
-        print(imgo.shape)
-    assert(0)
+                            shuffle=False,
+                            num_workers=1)
+    y_onehot = torch.FloatTensor(2, 2)
+
+    for imgO, label in train_loader:
+    
+        y_onehot.zero_()
+        y_onehot.scatter_(1, label, 1)
+        # assert(0)
+    
+    
+    
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     
