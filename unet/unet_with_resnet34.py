@@ -16,17 +16,14 @@ import copy
 import os
 import gc
 import pandas as pd
+from PIL import Image
 
 class AirbusDataset(Dataset):
     def __init__(self, csv_file, data_dir, transform=None):
         self.train_csv = pd.read_csv(os.path.join(data_dir, csv_file))
-
         self.data_dir = data_dir
         self.transform = transform
-
         self.valid_trainset = self.PreProcess()
-
-
 
     def PreProcess(self):
         if not os.path.exists("./exist_ships.csv"):
@@ -54,14 +51,31 @@ class AirbusDataset(Dataset):
         # self.train_gp = self.train_gp.drop(self.train_gp.index[0:100000])
         to_remove = np.random.choice(self.train_gp[self.train_gp['exist_ship']==0].index,
                                             size=100000,replace=False)
-        print(to_remove)
         self.train_gp = self.train_gp.drop(to_remove)
-        print(self.train_gp["exist_ship"].value_counts())
-
-
-
-
-
+        # print(self.train_gp["exist_ship"].value_counts())
+        # print (self.train_gp.shape)
+        self.train_sample = self.train_gp.sample(5000)
+        # print(self.train_sample["exist_ship"].value_counts())
+        # print(self.train_sample.iloc[0])
+        # image_name = self.train_sample.iloc[0]["ImageId"]
+        # print(image_name)
+        # print(self.train_sample.shape[0])
+    
+    def  __getitem__(self ,index):
+        image_name = self.train_sample.iloc[index]["ImageId"]
+        label = self.train_sample.iloc[index]["exist_ship"]
+        imgpath = os.path.join(self.data_dir, "train_v2/"+image_name)
+        print(image_name)
+        imgO = Image.open(imgpath).resize((256,256)).convert('RGB')
+        imgO = np.array(imgO, dtype=np.float32)
+        print(imgO.shape)
+        if self.transform is not None :
+            imgO = self.transform(imgO)
+        print(imgO.size)
+        return imgO, torch.Tensor(label)
+    
+    def __len__(self):
+        return self.train_sample.shape[0]
 
 def train_model(model, critertion, optimizer, scheduler, num_epochs=25, mode="train"):
     since = time.time()
@@ -153,24 +167,29 @@ def pre_process_data(data_dir):
     train_path = os.path.join(data_dir, "train_v2")
     test_path = os.path.join(data_dir, "test_v2")
 
-
-
 if __name__ == "__main__":
     csv_file = "train_ship_segmentations_v2.csv"
     data_dir = "./data_airbus"
 
     m = (0.485, 0.456, 0.406)
     s = (0.229, 0.224, 0.225)
-    preprocess = transforms.Compose([
+    transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=m, std=s),
     ])
 
-    airbus_dataset = AirbusDataset(csv_file, data_dir)
+    airbus_dataset = AirbusDataset(csv_file, data_dir, transform = transform)
+    # imgO, img, lbl = airbus_dataset[2]
+
+    train_loader = DataLoader(dataset=airbus_dataset,
+                            batch_size=2,
+                            shuffle=False)
+    for imgo , lbl in train_loader:
+        # print(img.shape)
+        print(imgo.shape)
     assert(0)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    
     
     resnet34 = models.resnet34(pretrained=True)
     for param in resnet34.parameters():
