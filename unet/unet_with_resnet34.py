@@ -162,8 +162,9 @@ if __name__ == "__main__":
     optimizer_resnet = optim.SGD(resnet34.parameters(), lr=0.001, momentum=0.9)
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_resnet, step_size=7, gamma=0.1)
 
-
-    for epoch in range(2):
+    PATH = './resnet_airbusship.pth'
+    min_loss = 10000.0
+    for epoch in range(100):
         running_loss = 0.0
         for i, (imgO, labels) in enumerate(train_loader, 0):
 
@@ -183,8 +184,13 @@ if __name__ == "__main__":
             loss.backward()
             optimizer_resnet.step()
 
-
+            # print statistics
+            running_loss += loss.item()
         print('[%d] loss: %.3f' %  (epoch + 1, running_loss))
+        if min_loss > running_loss:
+            torch.save(resnet34.state_dict(), PATH)
+            min_loss = running_loss
+            
     
 
     
