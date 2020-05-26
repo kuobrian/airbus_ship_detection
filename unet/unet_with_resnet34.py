@@ -18,6 +18,7 @@ import os
 import gc
 import pandas as pd
 from PIL import Image
+from torchviz import make_dot
 
 class AirbusDataset(Dataset):
     def __init__(self, csv_file, data_dir, transform=None):
@@ -179,6 +180,8 @@ if __name__ == "__main__":
             optimizer_resnet.zero_grad()
 
             outputs = resnet34(imgO)
+            make_dot(outputs)
+            assert(0)
 
             loss = criterion(outputs, labels)
             loss.backward()
