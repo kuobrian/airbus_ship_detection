@@ -155,9 +155,6 @@ class Resnet34Unet(nn.Module):
         out_conv4 = self.conv4_down(out_conv3)
         bottle = self.conv5_down(out_conv4)
 
-        # output = self.avg_pool(output)
-        # output = output.view(output.size(0), -1)
-        # output = self.fc(output)
         up_x = self.upsample(bottle)
         up_x = torch.cat([up_x, out_conv4], dim=1)
         up_x = self.conv1_up(up_x)
@@ -177,23 +174,45 @@ class Resnet34Unet(nn.Module):
         return out
 
 
-if __name__ == "__main__":
 
-    # model = resnet34Unet(3, 3)
-    x = torch.randn(5, 3, 512, 512)
-    # print(x.shape)
-    # out = m(x)
-    # print(out.shape)
+
+
+# if __name__ == "__main__":
+#     import time
+
+#     start = time.time()
+#     # x = torch.randn(5, 3, 512, 512)
+#     # model = resnet34Unet(3, 3)
+#     # out = model(x)
+#     # print(out.shape, time.time()-start)
+    
+#     # Using pre-trained model
+#     model = Resnet34Unet(3, 3)
+
+#     # Frozen parameters of the encoder layers    
+#     for child in model.children():
+#         child_counter +=1
+#         for param in child.parameters():
+#             param.requires_grad = False
+#         if child_counter == 6:
+#             break
+            
+
+
     # if torch.cuda.is_available():
-    #     m.cuda()
+    #     model.cuda()
+    
+    
+    
+    
+    
+    
+    
+    
+    
     # with SummaryWriter(comment='./runs/Resnet34Unet') as w:
-    #     m = Resnet34Unet(3, 3)
     #     w.add_graph(m, (x, ), verbose=True)
-    # writer.add_graph(m, (x))
-        # writer.close()
     # summary(m, (3, 512, 512))
-    # print("===========================")
-    # print(m)
     
 
 
