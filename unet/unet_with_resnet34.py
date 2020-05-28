@@ -20,6 +20,12 @@ import pandas as pd
 from PIL import Image
 from torchviz import make_dot
 
+
+def preprocess(data_dir, csv_file) --> DataFrame
+
+
+
+
 class AirbusDataset(Dataset):
     def __init__(self, csv_file, data_dir, transform=None):
         self.train_csv = pd.read_csv(os.path.join(data_dir, csv_file))
@@ -142,6 +148,7 @@ if __name__ == "__main__":
     ])
 
     airbus_dataset = AirbusDataset(csv_file, data_dir, transform = transform)
+    assert(0)
     # imgO, img, lbl = airbus_dataset[2]
 
     train_loader = DataLoader(dataset=airbus_dataset,
