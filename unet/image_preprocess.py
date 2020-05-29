@@ -12,6 +12,7 @@ from PIL import Image
 import torch.nn.functional as F
 import torch.nn as nn
 from resnet34Unet import Resnet34Unet
+os.environ["CUDA_VISIBLE_DEVICES"] = "7,8"
 
 
 def rle_encode(image):
@@ -93,7 +94,8 @@ def preprocess(data_dir, train_path, test_path):
 
     balanced_train_df.to_csv("./train_set.csv")
     valid_df.to_csv("./valid_set.csv")
-
+  
+    
     return balanced_train_df, valid_df
 
 class AirbusDataset(Dataset):
@@ -236,7 +238,7 @@ class metrics:
 
 if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    ship_dir = "../data"
+    ship_dir = "../data_airbus"
     train_path = os.path.join(ship_dir, "train_v2")
     test_path = os.path.join(ship_dir, "test_v2")
 
@@ -245,6 +247,7 @@ if __name__ == "__main__":
     else:
         train_df = pd.read_csv("./train_set.csv")
         valid_df = pd.read_csv("./valid_set.csv")
+
 
     m = (0.485, 0.456, 0.406)
     s = (0.229, 0.224, 0.225)
@@ -266,9 +269,10 @@ if __name__ == "__main__":
     ])
 
 
+ 
+
     train_dataset = AirbusDataset(ship_dir, train_df,\
                                 img_transform=img_transform, mask_transform=mask_transform)
-
 
     valid_dataset = AirbusDataset(ship_dir, valid_df,\
                                 img_transform=val_transform, mask_transform=mask_transform)
@@ -278,10 +282,12 @@ if __name__ == "__main__":
                         shuffle=True,
                         num_workers=1)
     
-    tvalid_loader = DataLoader(dataset=valid_dataset,
+    valid_loader = DataLoader(dataset=valid_dataset,
                         batch_size=4,
                         shuffle=True,
                         num_workers=1)
+
+
 
     
     model = Resnet34Unet(3, 1)
@@ -313,10 +319,11 @@ if __name__ == "__main__":
         criterion = BCEJaccardWithLogitsLoss()
     else:
         raise NameError("loss not supported")
-    
+ 
+
 
     min_loss = np.inf
-    for epoch in range(1):
+    for epoch in range(10):
         losses = 0
         # valid_metrics = metrics(batch_size=4)  # for validation
 
@@ -333,13 +340,12 @@ if __name__ == "__main__":
             optim.step()
 
             losses += loss.item()
-            print(loss)
-        
 
-        print('[%d] loss: %.3f' %  (epoch + 1, losses))
+        mean_loss = losses / len(train_loader)
+        print('[%d] loss: %.3f' %  (epoch + 1, mean_loss))
         if losses < min_loss:
             torch.save(model.state_dict(), "./uresnet34_best.pt")
-            min_loss = running_loss
+            min_loss = mean_loss
 
 
 
