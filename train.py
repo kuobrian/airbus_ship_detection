@@ -124,6 +124,35 @@ class BCEJaccardWithLogitsLoss(nn.Module):
             loss -= self.jaccard_weight * torch.log((intersection + self.smooth ) / (union + self.smooth )) # try with 1-dice
         return loss
 
+class FocalLoss(nn.Module):
+    def __init__(self, gamma):
+        super().__init__()
+        self.gamma = gamma
+        
+    def forward(self, input, target):
+        if not (target.size() == input.size()):
+            raise ValueError("Target size ({}) must be the same as input size ({})"
+                             .format(target.size(), input.size()))
+
+        max_val = (-input).clamp(min=0)
+        loss = input - input * target + max_val + \
+            ((-max_val).exp() + (-input - max_val).exp()).log()
+
+        invprobs = F.logsigmoid(-input * (target * 2.0 - 1.0))
+        loss = (invprobs * self.gamma).exp() * loss
+        
+        return loss.mean()
+
+class MixedLoss(nn.Module):
+    def __init__(self, alpha, gamma):
+        super().__init__()
+        self.alpha = alpha
+        self.focal = FocalLoss(gamma)
+        
+    def forward(self, input, target):
+        loss = self.alpha*self.focal(input, target) - torch.log(dice_loss(input, target))
+        return loss.mean()
+
 
 if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -152,7 +181,7 @@ if __name__ == "__main__":
 
     train_tfs = transforms.Compose([ iaa.Sequential([
                                         iaa.Fliplr(0.5),
-                                        iaa.size.Resize({"height": 512, "width": 512})
+                                        iaa.size.Resize({"height": 256, "width": 256})
                                         ]).augment_image
                             ])
 
@@ -164,6 +193,18 @@ if __name__ == "__main__":
                             num_workers=1)
     
     model = Resnet34Unet(3, 1)
+
+
+    model.to(device)
+    diceloss = BCEDiceWithLogitsLoss()
+    optim = torch.optim.Adam(model.parameters(), lr=0.002)
+
+    if os.path.exists("./weights/uresnet34_best.pt"):
+        print('Load pre-trained weights !! ')
+        model.load_state_dict(torch.load("./weights/uresnet34_best.pt"))
+
+    model.train()
+
     # Frozen parameters of the encoder layers
     child_counter = 0    
     for child in model.children():
@@ -173,18 +214,11 @@ if __name__ == "__main__":
         if child_counter == 6:
             break
 
-    model.to(device)
-    diceloss = BCEDiceWithLogitsLoss()
-    optim = torch.optim.Adam(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-6, amsgrad=False)
-
-
-    if os.path.exists("./weights/uresnet34_best.pt"):
-        print('Load pre-trained weights !! ')
-        model.load_state_dict(torch.load("./weights/uresnet34_best.pt"))
-
     model.train()
 
-    LOSS = 'BCEJaccardWithLogitsLoss'
+ 
+    LOSS = 'MixedLoss'
+    
     if LOSS == 'BCEWithDigits':
         criterion = nn.BCEWithLogitsLoss()
     elif LOSS == 'DiceLoss':
@@ -193,6 +227,8 @@ if __name__ == "__main__":
         criterion = BCEDiceWithLogitsLoss()
     elif LOSS == 'BCEJaccardWithLogitsLoss':
         criterion = BCEJaccardWithLogitsLoss()
+    elif LOOS = "MixedLoss"
+        criterion = MixedLoss(10.0, 2.0)
     else:
         raise NameError("loss not supported")
     

@@ -1,5 +1,3 @@
-from __future__ import print_function, division
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,61 +11,57 @@ import matplotlib.pyplot as plt
 
 import time
 import os
-import copy
-import os
-import gc
 import pandas as pd
 from PIL import Image
-from torchviz import make_dot
+from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 
 
-def preprocess(data_dir, csv_file) --> DataFrame
+def PreProcess(data_dir):
+    #corrupted image
+    exclude_list = ['6384c3e78.jpg','13703f040.jpg', '14715c06d.jpg',  '33e0ff2d5.jpg',
+                '4d4e09f2a.jpg', '877691df8.jpg', '8b909bb20.jpg', 'a8d99130e.jpg', 
+                'ad55c3143.jpg', 'c8260c541.jpg', 'd6c7f17c7.jpg', 'dc3e7c901.jpg',
+                'e44dffe88.jpg', 'ef87bad36.jpg', 'f083256d8.jpg']
+    
+    train_names = [f for f in os.listdir(os.path.join(data_dir, "train_v2"))]
+    test_names = [f for f in os.listdir(os.path.join(data_dir, "test_v2"))]
+    
+
+    for name in exclude_list:
+        if(name in train_names): 
+            train_names.remove(name)
+        if(name in test_names): 
+            test_names.remove(name)
 
 
+    masks = pd.read_csv(os.path.join(data_dir, 'train_ship_segmentations_v2.csv'))
+    test_masks = pd.read_csv(os.path.join(data_dir, "sample_submission_v2.csv"))
+
+
+    masks["ships"] = masks["EncodedPixels"].map(lambda c_row: 1 if isinstance(c_row, str) else 0)
+
+    masks = masks[masks["ImageId"].isin(train_names)]
+    test_df = test_masks[test_masks["ImageId"].isin(test_names)]
+
+    # masks["ships"].hist()
+    # plt.show()
+
+    # 5% of data in the validation set is sufficient for model evaluation
+    tr_df, val_df = train_test_split(masks, test_size=0.05, random_state=42)
+
+    return tr_df, val_df, test_df
 
 
 class AirbusDataset(Dataset):
-    def __init__(self, csv_file, data_dir, transform=None):
-        self.train_csv = pd.read_csv(os.path.join(data_dir, csv_file))
+    def __init__(self, data_dir, data_set, transform = None):
+        self.data_set = data_set
         self.data_dir = data_dir
         self.transform = transform
-        self.valid_trainset = self.PreProcess()
-
-    def PreProcess(self):
-        if not os.path.exists("./exist_ships.csv"):
-            # ''' delete annotations without ship '''
-            # self.train_csv = self.train_csv.dropna(axis=0)
-            num_of_ships = self.train_csv.shape[0]
-
-            ''' Add exist_ship labels'''
-            self.train_csv["exist_ship"] = self.train_csv['EncodedPixels'].fillna(0)
-            self.train_csv.loc[self.train_csv["exist_ship"] != 0, "exist_ship"] = 1
-            del self.train_csv["EncodedPixels"]
-
-            ''' duplicate image '''
-            print(len(self.train_csv["ImageId"]))
-            print(self.train_csv["ImageId"].value_counts().shape[0])
-            self.train_gp  = self.train_csv.groupby("ImageId").sum().reset_index()
-            self.train_gp .loc[self.train_gp ["exist_ship"]>0, "exist_ship"] = 1
-            
-            print(self.train_gp["exist_ship"].value_counts())
-            self.train_gp.to_csv("./exist_ships.csv")
-        else:
-            self.train_gp = pd.read_csv("./exist_ships.csv")
-
-        self.train_gp= self.train_gp.sort_values(by="exist_ship")
-
-
-        self.train_gp = self.train_gp.drop(self.train_gp.index[0:100000])
-        to_remove = np.random.choice(self.train_gp[self.train_gp['exist_ship']==0].index,
-                                            size=100000, replace=True)
-
-        self.train_gp = self.train_gp.drop(to_remove)
-        self.train_sample = self.train_gp.sample(5000)
         
     def  __getitem__(self ,index):
-        image_name = self.train_sample.iloc[index]["ImageId"]
-        label = self.train_sample.iloc[index]["exist_ship"]
+        image_name = self.data_set.iloc[index]["ImageId"]
+        label = self.data_set.iloc[index]["ships"]
         imgpath = os.path.join(self.data_dir, "train_v2/"+image_name)
         imgO = Image.open(imgpath).convert('RGB')
         if self.transform is not None :
@@ -76,7 +70,7 @@ class AirbusDataset(Dataset):
         return imgO,  label
     
     def __len__(self):
-        return self.train_sample.shape[0]
+        return self.data_set.shape[0]
 
 def pre_process_data(data_dir):
     train = pd.read_csv(os.path.join(data_dir, "train_ship_segmentations_v2.csv"))
@@ -108,16 +102,14 @@ def pre_process_data(data_dir):
     train_path = os.path.join(data_dir, "train_v2")
     test_path = os.path.join(data_dir, "test_v2")
 
-
-
 class CustomResnet34(nn.Module):
     def __init__(self, num_classes, training = True):
         super().__init__()
         self.training = training
         self.num_classes = num_classes
         self.resnet = models.resnet34(pretrained=True)
-        # for param in self.resnet.parameters():
-        #     param.requires_grad = False
+        for param in self.resnet.parameters():
+            param.requires_grad = False
         self.in_num_ftrs = self.resnet.fc.in_features
         self.out_num_ftrs = self.resnet.fc.out_features
 
@@ -137,68 +129,85 @@ if __name__ == "__main__":
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     csv_file = "train_ship_segmentations_v2.csv"
-    data_dir = "./data_airbus"
-    
+    data_dir = "./data"
+    print(device)
+
+    train_df, val_df, test_df = PreProcess(data_dir)
+
+
     m = (0.485, 0.456, 0.406)
     s = (0.229, 0.224, 0.225)
-    transform = transforms.Compose([
+    tfs = transforms.Compose([
         transforms.Resize((256)),
         transforms.ToTensor(),
         transforms.Normalize(mean=m, std=s)
     ])
 
-    airbus_dataset = AirbusDataset(csv_file, data_dir, transform = transform)
-    assert(0)
-    # imgO, img, lbl = airbus_dataset[2]
-
-    train_loader = DataLoader(dataset=airbus_dataset,
-                            batch_size=32,
+    train_dataset = AirbusDataset(data_dir, train_df, transform = tfs)
+    train_loader = DataLoader(dataset=train_dataset,
+                            batch_size=64,
                             shuffle=False,
-                            num_workers=1)
+                            num_workers=4)
+
+    val_dataset = AirbusDataset(data_dir, val_df, transform = tfs)
+    val_loader = DataLoader(dataset=val_dataset,
+                            batch_size=64,
+                            shuffle=False,
+                            num_workers=4)
+
+
     y_onehot = torch.FloatTensor(2, 2)
-
-
+   
     # resnet34 = models.resnet34(pretrained=True)
-
-
-    resnet34 = CustomResnet34(2)
+    Uresnet34 = CustomResnet34(2)
     # for param in resnet34.parameters():
     #     print(param.requires_grad)
 
-    resnet34 = resnet34.to(device)
+    Uresnet34 = Uresnet34.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer_resnet = optim.SGD(resnet34.parameters(), lr=0.001, momentum=0.9)
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_resnet, step_size=7, gamma=0.1)
+    optimizer_resnet = optim.SGD(Uresnet34.parameters(), lr=0.002)
+    # exp_lr_scheduler = lr_scheduler.StepLR(optimizer_resnet, step_size=7, gamma=0.1)
 
-    PATH = './resnet_airbusship.pth'
-    min_loss = 10000.0
-    for epoch in range(100):
+    PATH = './weights/classification_ships_UResnet34.pt'
+    min_loss = np.inf
+    step = 0
+    for epoch in range(10):
         running_loss = 0.0
-        for i, (imgO, labels) in enumerate(train_loader, 0):
-
+        for batch_idx, (imgO, labels) in enumerate(train_loader):
             # y_onehot.zero_()
             # y_onehot.scatter_(1, labels, 1)
             # print(imgO.shape)
             # print(y_onehot.shape)
-            # pass 
-
+            Uresnet34.train()
             imgO = imgO.to(device)
             labels = labels.to(device)
+            outputs = Uresnet34(imgO)
+            
             optimizer_resnet.zero_grad()
-
-            outputs = resnet34(imgO)
-            make_dot(outputs)
-            assert(0)
-
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer_resnet.step()
-
-            # print statistics
             running_loss += loss.item()
-        print('[%d] loss: %.3f' %  (epoch + 1, running_loss))
+            step += 1
+            if step % 10 == 0:
+                print('\t Step: {}, loss: {}'.format(step, running_loss/(batch_idx + 1) ))
+
+        # if (epoch + 1) % 5 == 0 :
+        Uresnet34.eval()
+        n_dev_correct, dev_loss = 0, 0
+        with torch.no_grad():
+            for dev_batch_idx, (val_imgs, val_labels) in enumerate(val_loader):
+                val_outputs = Uresnet34(val_imgs)
+                n_dev_correct += (torch.max(val_outputs, 1)[1].view(val_labels.size()) == val_labels).sum().item()
+                dev_loss = criterion(val_outputs, val_labels)
+        
+        dev_acc = 100. * n_dev_correct / len(val_loader)
+        running_loss = running_loss/len(train_loader)
+        print('[{}] loss: {}, val acc: {}, val loss: {}'.format(epoch + 1, running_loss, dev_acc, dev_loss))
         if min_loss > running_loss:
-            torch.save(resnet34.state_dict(), PATH)
+            torch.save({"weights": resnet34.state_dict(),
+                        "dev_acc": dev_acc,
+                        "dev_loss": dev_loss}, PATH)
             min_loss = running_loss
             
     
