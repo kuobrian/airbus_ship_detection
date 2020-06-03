@@ -150,8 +150,15 @@ class MixedLoss(nn.Module):
         self.focal = FocalLoss(gamma)
         
     def forward(self, input, target):
+        dice_loss = DiceLoss()
         loss = self.alpha*self.focal(input, target) - torch.log(dice_loss(input, target))
         return loss.mean()
+
+
+def IoU(pred, targs):
+    pred = (pred > 0).float()
+    intersection = (pred*targs).sum()
+    return intersection / ((pred+targs).sum() - intersection + 1.0)
 
 
 if __name__ == "__main__":
@@ -174,11 +181,6 @@ if __name__ == "__main__":
     train_df, valid_df = drop_img_without_ships(masks, unique_img_ids)
 
     
-    # train_seq = iaa.Sequential([
-    #                     iaa.Fliplr(0.5),
-    #                     iaa.size.Resize({"height": 512, "width": 512})
-    #                     ])
-
     train_tfs = transforms.Compose([ iaa.Sequential([
                                         iaa.Fliplr(0.5),
                                         iaa.size.Resize({"height": 256, "width": 256})
@@ -186,18 +188,24 @@ if __name__ == "__main__":
                             ])
 
     train_dataset = AirbusDataset(ship_dir, train_df, transform = train_tfs)
-    # assert(0)
     train_loader = DataLoader(dataset=train_dataset,
-                            batch_size=8,
+                            batch_size=64,
+                            shuffle=True,
+                            num_workers=1)
+
+
+    val_tfs = transforms.Compose([ iaa.Sequential([
+                                        iaa.size.Resize({"height": 256, "width": 256})
+                                        ]).augment_image
+                            ])
+    valid_dataset = AirbusDataset(ship_dir, valid_df, transform = val_tfs)
+    valid_loader = DataLoader(dataset=valid_dataset,
+                            batch_size=64,
                             shuffle=True,
                             num_workers=1)
     
     model = Resnet34Unet(3, 1)
-
-
     model.to(device)
-    diceloss = BCEDiceWithLogitsLoss()
-    optim = torch.optim.Adam(model.parameters(), lr=0.002)
 
     if os.path.exists("./weights/uresnet34_best.pt"):
         print('Load pre-trained weights !! ')
@@ -214,11 +222,10 @@ if __name__ == "__main__":
         if child_counter == 6:
             break
 
-    model.train()
 
- 
     LOSS = 'MixedLoss'
-    
+    optim = torch.optim.Adam(model.parameters(), lr=0.002)
+ 
     if LOSS == 'BCEWithDigits':
         criterion = nn.BCEWithLogitsLoss()
     elif LOSS == 'DiceLoss':
@@ -227,36 +234,56 @@ if __name__ == "__main__":
         criterion = BCEDiceWithLogitsLoss()
     elif LOSS == 'BCEJaccardWithLogitsLoss':
         criterion = BCEJaccardWithLogitsLoss()
-    elif LOOS = "MixedLoss"
+    elif LOSS == "MixedLoss":
         criterion = MixedLoss(10.0, 2.0)
     else:
         raise NameError("loss not supported")
     
 
-    min_loss = np.inf
+    # min_loss = np.inf
+    min_loss = 2.377
     step = 0
     for epoch in range(10):
         losses = 0
-        for i, (imgO, labels) in enumerate(train_loader, 0):
+        for batch_idx, (imgO, labels) in enumerate(train_loader, 0):
+            model.train()
             optim.zero_grad()
             imgO = imgO.to(device)       # [B, 3, H, W]
             labels = labels.to(device)   # [B, H, W] with class indices (0, 1)
             out = model(imgO)            # [B, 3, H, W]
 
-
             loss = criterion(out, labels)
-
             loss.backward()
             optim.step()
-
             losses += loss.item()
-            print(loss)
-            # assert(0)
-        
+            step += 1
+            if step % 10 == 0:
+                print('\t Step: {}, loss: {}'.format(step, losses/(batch_idx + 1) ))
+
+
+        model.eval()
+        dev_loss, IoU_value, diceloss = 0, 0, 0
+        with torch.no_grad():
+            for dev_batch_idx, (val_imgs, val_masks) in enumerate(valid_loader):
+                val_imgs = val_imgs.to(device)
+                val_masks = val_masks.to(device)
+                val_outputs = model(val_imgs)
+
+                dev_loss += criterion(val_outputs, val_masks).item()
+                IoU_value += IoU(val_outputs, val_masks).item()
+                diceloss += DiceLoss().forward(val_outputs, val_masks).item()
+
         mean_loss = losses / len(train_loader)
-        print('[%d] loss: %.3f' %  (epoch + 1, mean_loss))
-        if losses < min_loss:
-            torch.save(model.state_dict(), "./weights/uresnet34_best.pt")
+        print('[{}] loss: {}, val loss: {} , IOU: {}, dice loss: {}'.format(epoch + 1,
+                                                                            mean_loss,
+                                                                            dev_loss/len(valid_loader),
+                                                                            IoU_value/len(valid_loader),
+                                                                            diceloss/len(valid_loader)))
+        if mean_loss < min_loss:
+            torch.save(
+                {"weights":model.state_dict(),
+                    "Iou": IoU_value/len(valid_loader),
+                    "dev_loss": dev_loss/len(valid_loader)}, "./weights/uresnet34_best.pt")
             min_loss = mean_loss
 
 
