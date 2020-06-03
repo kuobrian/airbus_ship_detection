@@ -1,4 +1,4 @@
-## This kaggle competition airbus ship detection challenge
+## kaggle competition: airbus ship detection challenge
 
 ## what is EncodedPixels?
 
@@ -9,26 +9,31 @@ If the object is on the row 1, between pixels 5 and 5, you can express it like :
 ## Data Prepare
 
 - [ ] Delete useless images without ships
-- [ ] Find bad annotations and save them in the folder (../tmp/bad_anns);
-- [ ] Transform RLE into COCO annotations
-    + [pycoccreator](https://github.com/waspinator/pycococreator "Title")
+- [ ] Add index for ships existence(0 or 1)
+- [ ] drop and split train & valid set
 
 
+## Detect ship existence - classification_ships_UResnet34.py
+- [ ] Do transfer learning with Resnet34 
+- [ ] Load training and valid set
+- [ ] Image size 256 x 256, RGB data
 
-## Detect ship exist or not - unet_with_resnet34.py
-- [ ] Use Resnet34 to do transfer learning
-- [ ] Load 5000 images to be training
-- [ ] Split ~4000 training set, ~1000 validate set
+## ship semantic segmentationn - train.py
+- [ ] Use Unet Base on ResNet34 model 
+- [ ] Load training and valid set
 - [ ] Image size 256 x 256, RGB data
 
 
-## Submittion result with predict ship + Unet34 
-- [ ] Use Unet Base on ResNet34 model
-- [ ] Load 5000 images to be training
-- [ ] Use bce_log+dice_loss for ResNet34+Unet loss function
-- [ ] Image size 256 x 256, RGB data
+## Submittion result with predict ship + Unet34 - submit.py
+
+Size| lr | train_loss | val_loss | IoU | dice | result |
+:----:|:----:|:----:|:----:|:----:|:----:|:----:|
+256x256 | 0.002 |    |    |    |    |    |
+384x384 |    |    |    |    |    |      |
+768x768 |    |    |    |    |    |    |
 
 ## Ref.
 
-[Simple transfer Learning detect Ship exist (Keras)](https://www.kaggle.com/super13579/simple-transfer-learning-detect-ship-exist-keras "title")
-[U-Net base on ResNet34 Transfer learning (Keras)](https://www.kaggle.com/super13579/u-net-base-on-resnet34-transfer-learning-keras/notebook "title")
+1. [Simple transfer Learning detect Ship exist (Keras)](https://www.kaggle.com/super13579/simple-transfer-learning-detect-ship-exist-keras "title")
+
+2. [U-Net base on ResNet34 Transfer learning (Keras)](https://www.kaggle.com/super13579/u-net-base-on-resnet34-transfer-learning-keras/notebook "title")
