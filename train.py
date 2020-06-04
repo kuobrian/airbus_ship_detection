@@ -64,7 +64,7 @@ class DiceLoss(nn.Module):
     def forward(self, x, y):
         nums = y.size(0)
         smooth = 1.
-        x = F.sigmoid(x)
+        x = torch.sigmoid(x)
         x_flat = x.view(nums, -1)
         y_flat = y.view(nums, -1)
         
@@ -237,8 +237,7 @@ if __name__ == "__main__":
         raise NameError("loss not supported")
     
 
-    # min_loss = np.inf
-    min_loss = 2.377
+    min_loss = np.inf
     Iou = 0
     step = 0
 
