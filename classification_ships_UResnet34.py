@@ -146,7 +146,7 @@ if __name__ == "__main__":
     train_dataset = AirbusDataset(data_dir, train_df, transform = tfs)
     train_loader = DataLoader(dataset=train_dataset,
                             batch_size=64,
-                            shuffle=False,
+                            shuffle=True,
                             num_workers=4)
 
     val_dataset = AirbusDataset(data_dir, val_df, transform = tfs)
@@ -169,46 +169,65 @@ if __name__ == "__main__":
     # exp_lr_scheduler = lr_scheduler.StepLR(optimizer_resnet, step_size=7, gamma=0.1)
 
     PATH = './weights/classification_ships_UResnet34.pt'
+
+
+
     min_loss = np.inf
     step = 0
+    
+    if os.path.exists(PATH):
+        print('Load pre-trained weights !! ')
+        checkpoint = torch.load(PATH)
+        Uresnet34.load_state_dict(checkpoint['weights'])
+        dev_acc = checkpoint['dev_acc']
+        min_loss = checkpoint['dev_loss']
+
+    
+    
     for epoch in range(10):
         running_loss = 0.0
-        for batch_idx, (imgO, labels) in enumerate(train_loader):
-            # y_onehot.zero_()
-            # y_onehot.scatter_(1, labels, 1)
-            # print(imgO.shape)
-            # print(y_onehot.shape)
-            Uresnet34.train()
-            imgO = imgO.to(device)
-            labels = labels.to(device)
-            outputs = Uresnet34(imgO)
+        # for batch_idx, (imgO, labels) in enumerate(train_loader):
+        #     Uresnet34.train()
+        #     imgO = imgO.to(device)
+        #     labels = labels.to(device)
+        #     outputs = Uresnet34(imgO)
             
-            optimizer_resnet.zero_grad()
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer_resnet.step()
-            running_loss += loss.item()
-            step += 1
-            if step % 10 == 0:
-                print('\t Step: {}, loss: {}'.format(step, running_loss/(batch_idx + 1) ))
+        #     optimizer_resnet.zero_grad()
 
-        # if (epoch + 1) % 5 == 0 :
+        #     loss = criterion(outputs, labels)
+        #     loss.backward()
+        #     optimizer_resnet.step()
+        #     running_loss += loss.item()
+            
+        #     step += 1
+        #     if step % 10 == 0:
+        #         print('\t Step: {}, loss: {}'.format(batch_idx+1, running_loss/(batch_idx + 1) ))
+
         Uresnet34.eval()
         n_dev_correct, dev_loss = 0, 0
         with torch.no_grad():
             for dev_batch_idx, (val_imgs, val_labels) in enumerate(val_loader):
+                val_imgs = val_imgs.to(device)
+                val_labels = val_labels.to(device)
+
                 val_outputs = Uresnet34(val_imgs)
                 n_dev_correct += (torch.max(val_outputs, 1)[1].view(val_labels.size()) == val_labels).sum().item()
-                dev_loss = criterion(val_outputs, val_labels)
-        
-        dev_acc = 100. * n_dev_correct / len(val_loader)
+                dev_loss += criterion(val_outputs, val_labels).item()
+
+        dev_acc = 100. * n_dev_correct / val_df.shape[0]
+        dev_loss = dev_loss/len(val_loader)
         running_loss = running_loss/len(train_loader)
+
+
         print('[{}] loss: {}, val acc: {}, val loss: {}'.format(epoch + 1, running_loss, dev_acc, dev_loss))
-        if min_loss > running_loss:
-            torch.save({"weights": resnet34.state_dict(),
-                        "dev_acc": dev_acc,
-                        "dev_loss": dev_loss}, PATH)
-            min_loss = running_loss
+
+
+
+        # if min_loss > dev_loss:
+        #     torch.save({"weights": Uresnet34.state_dict(),
+        #                 "dev_acc": dev_acc,
+        #                 "dev_loss": dev_loss}, PATH)
+        #     min_loss = dev_loss
             
     
 

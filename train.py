@@ -207,11 +207,8 @@ if __name__ == "__main__":
     model = Resnet34Unet(3, 1)
     model.to(device)
 
-    if os.path.exists("./weights/uresnet34_best.pt"):
-        print('Load pre-trained weights !! ')
-        model.load_state_dict(torch.load("./weights/uresnet34_best.pt"))
 
-    model.train()
+
 
     # Frozen parameters of the encoder layers
     child_counter = 0    
@@ -242,7 +239,18 @@ if __name__ == "__main__":
 
     # min_loss = np.inf
     min_loss = 2.377
+    Iou = 0
     step = 0
+
+    if os.path.exists("./weights/uresnet34_best.pt"):
+        print('Load pre-trained weights !! ')
+        checkpoint = torch.load("./weights/uresnet34_best.pt")
+        model.load_state_dict(checkpoint['weights'])
+        Iou = checkpoint['Iou']
+        min_loss = checkpoint['dev_loss']
+    print(min_loss, Iou)
+    assert(0)
+
     for epoch in range(10):
         losses = 0
         for batch_idx, (imgO, labels) in enumerate(train_loader, 0):
@@ -257,7 +265,7 @@ if __name__ == "__main__":
             optim.step()
             losses += loss.item()
             step += 1
-            if step % 10 == 0:
+            if step % 100 == 0:
                 print('\t Step: {}, loss: {}'.format(step, losses/(batch_idx + 1) ))
 
 
@@ -279,12 +287,13 @@ if __name__ == "__main__":
                                                                             dev_loss/len(valid_loader),
                                                                             IoU_value/len(valid_loader),
                                                                             diceloss/len(valid_loader)))
-        if mean_loss < min_loss:
+        if (dev_loss/len(valid_loader)) < min_loss:
+            print("Save model weights")
             torch.save(
                 {"weights":model.state_dict(),
                     "Iou": IoU_value/len(valid_loader),
                     "dev_loss": dev_loss/len(valid_loader)}, "./weights/uresnet34_best.pt")
-            min_loss = mean_loss
+            min_loss = dev_loss
 
 
 
