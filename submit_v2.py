@@ -48,13 +48,9 @@ def vis_validate_data(device, test_img_size):
                             num_workers=4)
     
     model = Resnet34Unet(3, 1).to(device)
-    PATH = "./weights/uresnet34_best.pt"
-    PATH = "./weights/CUResnet34_best.pt"
-
-
-    if os.path.exists(PATH):
+    if os.path.exists("./weights/uresnet34_best.pt"):
         print('Load pre-trained weights !! ')
-        checkpoint = torch.load(PATH)
+        checkpoint = torch.load("./weights/uresnet34_best.pt")
         model.load_state_dict(checkpoint['weights'])
         Iou = checkpoint['Iou']
         val_loss = checkpoint['dev_loss']
@@ -74,11 +70,6 @@ def vis_validate_data(device, test_img_size):
 
         imshow_gt_out(grid_imgs, grid_labels, grid_output)
         plt.show()
-
-
-
-
-
 
 
 def imshow_gt_out(img, mask_gt, mask_out):
@@ -108,13 +99,14 @@ def imshow_gt_out(img, mask_gt, mask_out):
 
 
 if __name__ == "__main__":
-    test_img_size = 256
+    test_img_size = 384 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # vis_validate_data(device, test_img_size)
     # assert(0)
 
     model = Resnet34Unet(3, 1).to(device)
+
 
     # PATH = "./weights/uresnet34_best.pt"
     PATH = "./weights/CUResnet34_best.pt"
@@ -127,13 +119,21 @@ if __name__ == "__main__":
         Iou = checkpoint['Iou']
         val_loss = checkpoint['dev_loss']
     print(val_loss, Iou)
-
-    
-    
+   
     model.eval()
 
     ship_dir = "./data"
     test_df = pd.read_csv(os.path.join(ship_dir, "sample_submission_v2.csv"))
+    
+    test_ships_df = pd.read_csv("./exits_ships_940_256.csv")
+    ships_group = test_ships_df.groupby("ships")
+
+    non_ships_df = ships_group.get_group(0)
+    ships_df = ships_group.get_group(1)
+
+    non_ships_df["EncodedPixels"] = None
+    non_ships_df = non_ships_df.drop(["ships"], axis=1)
+
 
     test_tfs = transforms.Compose([ iaa.Sequential([
                                         iaa.size.Resize({"height": test_img_size, "width": test_img_size})
@@ -141,7 +141,7 @@ if __name__ == "__main__":
                             ])
 
 
-    test_dataset = AirbusDataset(ship_dir, test_df, transform = test_tfs, mode="test")
+    test_dataset = AirbusDataset(ship_dir, ships_df, transform = test_tfs, mode="test")
 
     test_loader = DataLoader(dataset=test_dataset,
                             batch_size=4,
@@ -170,12 +170,14 @@ if __name__ == "__main__":
                 submission['EncodedPixels'].append(None)
 
         # assert(0)
-    
     submission_df = pd.DataFrame(submission, columns=['ImageId', 'EncodedPixels'])
-    submission_df.to_csv('./out_submit/submission_{}_{}.csv'.format(int(val_loss * 1000), test_img_size),
+
+    res_df = submission_df.append(non_ships_df, ignore_index=True)
+    
+    res_df.to_csv('./out_submit/submission_v2_{}_{}.csv'.format(int(val_loss * 1000), test_img_size),
                                                                     index=False)
-    submission_df.to_csv('./submission.csv', index=False)
-    submission_df.sample(10)
+    res_df.to_csv('./submission_v2.csv', index=False)
+    res_df.sample(10)
     print(val_loss ," / ", test_img_size)
 
 
